@@ -1,2 +1,0 @@
-data/obj_train_data/_000002.png
-data/obj_train_data/_000001.png
