@@ -36,7 +36,6 @@ static float demo_thresh = 0;
 static int demo_ext_output = 0;
 static long long int frame_id = 0;
 static int demo_json_port = -1;
-static bool demo_skip_frame = false;
 
 
 static int avg_frames;
@@ -60,15 +59,15 @@ void *fetch_in_thread(void *ptr)
     while (!custom_atomic_load_int(&flag_exit)) {
         while (!custom_atomic_load_int(&run_fetch_in_thread)) {
             if (custom_atomic_load_int(&flag_exit)) return 0;
-            if (demo_skip_frame)
-                consume_frame(cap);
             this_thread_yield();
         }
         int dont_close_stream = 0;    // set 1 if your IP-camera periodically turns off and turns on video-stream
-        if (letter_box)
+        if (letter_box) {
             in_s = get_image_from_stream_letterbox(cap, net.w, net.h, net.c, &in_img, dont_close_stream);
-        else
+        }
+        else {
             in_s = get_image_from_stream_resize(cap, net.w, net.h, net.c, &in_img, dont_close_stream);
+        }
         if (!in_s.data) {
             printf("Stream closed.\n");
             custom_atomic_store_int(&flag_exit, 1);
@@ -171,11 +170,9 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
     if(filename){
         printf("video file: %s\n", filename);
         cap = get_capture_video_stream(filename);
-        demo_skip_frame = is_live_stream(filename);
     }else{
         printf("Webcam index: %d\n", cam_index);
         cap = get_capture_webcam(cam_index);
-        demo_skip_frame = true;
     }
 
     if (!cap) {
@@ -235,7 +232,9 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
         create_window_cv("Demo", full_screen, 1352, 1013);
     }
 
-
+    // printf("-----%d %d", get_width_mat(det_img), get_height_mat(det_img));
+    int img_width = get_width_mat(det_img);
+    int img_height = get_height_mat(det_img);
     write_cv* output_video_writer = NULL;
     if (out_filename && !flag_exit)
     {
@@ -302,7 +301,7 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
                 }
             }
 
-            if (!benchmark && !dontdraw_bbox) draw_detections_cv_v3(show_img, local_dets, local_nboxes, demo_thresh, demo_names, demo_alphabet, demo_classes, demo_ext_output);
+            if (!benchmark && !dontdraw_bbox) draw_detections_cv_v3(show_img, local_dets, local_nboxes, demo_thresh, demo_names, demo_alphabet, demo_classes, demo_ext_output, img_height, img_width);
             free_detections(local_dets, local_nboxes);
 
             printf("\nFPS:%.1f \t AVG_FPS:%.1f\n", fps, avg_fps);
