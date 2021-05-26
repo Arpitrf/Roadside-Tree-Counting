@@ -581,6 +581,9 @@ extern "C" cap_cv* get_capture_video_stream(const char *path) {
     cv::VideoCapture* cap = NULL;
     try {
         cap = new cv::VideoCapture(path);
+        // float height = cap->get(cv.CAP_PROP_FRAME_HEIGHT);
+        // float width = cap->get(cv.CAP_PROP_FRAME_WIDTH);
+        // printf("!!!! %f, %f", height, width);
     }
     catch (...) {
         cerr << " OpenCV exception: video-stream " << path << " can't be opened! \n";
@@ -834,15 +837,6 @@ extern "C" image get_image_from_stream_letterbox(cap_cv *cap, int w, int h, int 
 }
 // ----------------------------------------
 
-extern "C" void consume_frame(cap_cv *cap){
-    cv::Mat *src = NULL;
-    src = (cv::Mat *)get_capture_frame_cv(cap);
-    if (src)
-        delete src;
-}
-// ----------------------------------------
-
-
 // ====================================================================
 // Image Saving
 // ====================================================================
@@ -884,7 +878,7 @@ extern "C" void save_cv_jpg(mat_cv *img_src, const char *name)
 // ====================================================================
 // Draw Detection
 // ====================================================================
-extern "C" void draw_detections_cv_v3(mat_cv* mat, detection *dets, int num, float thresh, char **names, image **alphabet, int classes, int ext_output)
+extern "C" void draw_detections_cv_v3(mat_cv* mat, detection *dets, int num, float thresh, char **names, image **alphabet, int classes, int ext_output, int img_height, int img_width)
 {
     try {
         cv::Mat *show_img = (cv::Mat*)mat;
@@ -892,7 +886,28 @@ extern "C" void draw_detections_cv_v3(mat_cv* mat, detection *dets, int num, flo
         if (!show_img) return;
         static int frame_id = 0;
         frame_id++;
-
+        printf("Frame ID: %d\n", frame_id);
+        static int tree_count = 0;
+        static int frame_id_counter = 0;
+        static int box_area_to_compare = 0;
+        static int box_area_threshold = 0;
+        static int no_of_next_frames = 7;
+        static float box_area_threshold_percent = 0.5;
+        static float counting_range_percent = 0.04;
+        int mid = img_width / 2;
+        int range = counting_range_percent * img_width / 2;
+        int left_limit = mid - range;
+        int right_limit = mid + range;
+        cv::Point demo_rect_top, demo_rect_bottom;
+        demo_rect_top.x = left_limit;
+        demo_rect_top.y = 0;
+        demo_rect_bottom.x = right_limit;
+        demo_rect_bottom.y = img_height;
+        cv::Mat overlay;
+        double alpha = 0.3;
+        show_img->copyTo(overlay);
+        cv::rectangle(overlay, demo_rect_top, demo_rect_bottom, cv::Scalar(124,252,0), CV_FILLED, CV_AA, 0);
+        cv::addWeighted(overlay, alpha, *show_img, 1 - alpha, 0, *show_img);
         for (i = 0; i < num; ++i) {
             char labelstr[4096] = { 0 };
             int class_id = -1;
@@ -960,11 +975,31 @@ extern "C" void draw_detections_cv_v3(mat_cv* mat, detection *dets, int num, flo
                 if (top < 0) top = 0;
                 if (bot > show_img->rows - 1) bot = show_img->rows - 1;
 
-                //int b_x_center = (left + right) / 2;
-                //int b_y_center = (top + bot) / 2;
-                //int b_width = right - left;
-                //int b_height = bot - top;
-                //sprintf(labelstr, "%d x %d - w: %d, h: %d", b_x_center, b_y_center, b_width, b_height);
+                int b_x_center = (left + right) / 2;
+                int b_y_center = (top + bot) / 2;
+                int b_width = right - left;
+                int b_height = bot - top;
+
+                // printf("+++++ %d, %d", left_limit, right_limit);
+                if(b_x_center >= left_limit && b_x_center <= right_limit) {
+                  if(frame_id_counter == 0) {
+                    frame_id_counter = no_of_next_frames;
+                    box_area_to_compare = b_width * b_height;
+                    tree_count++;
+                    box_area_threshold = box_area_threshold_percent * box_area_to_compare;
+                  }
+                  if (frame_id_counter != 0 && frame_id_counter != no_of_next_frames) {
+                    //calculate area and compare to previous one
+                    int curr_box_area = b_width * b_height;
+                    // printf("\nCurr: %d, Prev: %d, Threshold: %d\n", curr_box_area, box_area_to_compare, box_area_threshold);
+                    if(abs(curr_box_area - box_area_to_compare) > box_area_threshold) {
+                      tree_count++;
+                    }
+                  }
+                }
+                // frame_id_counter =frame_id_counter != 0 ? frame_id_counter - 1 : 0;
+                sprintf(labelstr, "%d x %d - w: %d, h: %d, COUNT: %d", b_x_center, b_y_center, b_width, b_height, tree_count);
+                printf("%d x %d - w: %d, h: %d, COUNT: %d", b_x_center, b_y_center, b_width, b_height, tree_count);
 
                 float const font_size = show_img->rows / 1000.F;
                 cv::Size const text_size = cv::getTextSize(labelstr, cv::FONT_HERSHEY_COMPLEX_SMALL, font_size, 1, 0);
@@ -1009,16 +1044,27 @@ extern "C" void draw_detections_cv_v3(mat_cv* mat, detection *dets, int num, flo
                 else
                     printf("\n");
 
-                cv::rectangle(*show_img, pt_text_bg1, pt_text_bg2, color, width, 8, 0);
-                cv::rectangle(*show_img, pt_text_bg1, pt_text_bg2, color, CV_FILLED, 8, 0);    // filled
-                cv::Scalar black_color = CV_RGB(0, 0, 0);
-                cv::putText(*show_img, labelstr, pt_text, cv::FONT_HERSHEY_COMPLEX_SMALL, font_size, black_color, 2 * font_size, CV_AA);
+                cv::drawMarker(*show_img, cv::Point(b_x_center, b_y_center), color);
+                // cv::rectangle(*show_img, pt_text_bg1, pt_text_bg2, color, width, 8, 0);
+                // cv::rectangle(*show_img, pt_text_bg1, pt_text_bg2, color, CV_FILLED, 8, 0);    // filled
+                // cv::Scalar black_color = CV_RGB(0, 0, 0);
+                // cv::putText(*show_img, labelstr, pt_text, cv::FONT_HERSHEY_COMPLEX_SMALL, font_size, black_color, 2 * font_size, CV_AA);
                 // cv::FONT_HERSHEY_COMPLEX_SMALL, cv::FONT_HERSHEY_SIMPLEX
             }
+        }
+        if (frame_id_counter != 0) {
+          frame_id_counter--;
         }
         if (ext_output) {
             fflush(stdout);
         }
+        float const font_size2 = show_img->rows / 500.F;
+        // char labelstr[20] = "Tree Count: ";
+        std::string label("Tree Count: ");
+        label += std::to_string(tree_count);
+        int bottom_margin = 0.05 * img_height;
+        int left_margin = 0.35 * img_width;
+        cv::putText(*show_img, label, cv::Point(left_margin, img_height - bottom_margin), cv::FONT_HERSHEY_COMPLEX, font_size2, CV_RGB(0, 0, 0), 2 * font_size2, CV_AA); 
     }
     catch (...) {
         cerr << "OpenCV exception: draw_detections_cv_v3() \n";
@@ -1136,12 +1182,12 @@ extern "C" void draw_train_loss(char *windows_name, mat_cv* img_src, int img_siz
             if (iteration_old == 0)
                 cv::putText(img, accuracy_name, cv::Point(10, 12), cv::FONT_HERSHEY_COMPLEX_SMALL, 0.7, CV_RGB(255, 0, 0), 1, CV_AA);
 
-	        if (iteration_old != 0){
-            	    cv::line(img,
+            if (iteration_old != 0){
+                    cv::line(img,
                         cv::Point(img_offset + draw_size * (float)iteration_old / max_batches, draw_size * (1 - old_precision)),
                         cv::Point(img_offset + draw_size * (float)current_batch / max_batches, draw_size * (1 - precision)),
                         CV_RGB(255, 0, 0), 1, 8, 0);
-	        }
+            }
 
             sprintf(char_buff, "%2.1f%% ", precision * 100);
             cv::putText(img, char_buff, cv::Point(10, 28), cv::FONT_HERSHEY_COMPLEX_SMALL, 0.7, CV_RGB(255, 255, 255), 5, CV_AA);
@@ -1423,9 +1469,9 @@ extern "C" void cv_draw_object(image sized, float *truth_cpu, int max_boxes, int
 
     while (!selected) {
 #ifndef CV_VERSION_EPOCH
-        int pressed_key = cv::waitKeyEx(20);	// OpenCV 3.x
+        int pressed_key = cv::waitKeyEx(20);    // OpenCV 3.x
 #else
-        int pressed_key = cv::waitKey(20);		// OpenCV 2.x
+        int pressed_key = cv::waitKey(20);      // OpenCV 2.x
 #endif
         if (pressed_key == 27 || pressed_key == 1048603) break;// break;  // ESC - save & exit
 
