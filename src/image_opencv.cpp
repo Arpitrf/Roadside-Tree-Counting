@@ -878,12 +878,12 @@ extern "C" void save_cv_jpg(mat_cv *img_src, const char *name)
 // ====================================================================
 // Draw Detection
 // ====================================================================
-extern "C" void draw_detections_cv_v3(mat_cv* mat, detection *dets, int num, float thresh, char **names, image **alphabet, int classes, int ext_output, int img_height, int img_width)
+extern "C" int draw_detections_cv_v3(mat_cv* mat, detection *dets, int num, float thresh, char **names, image **alphabet, int classes, int ext_output, int img_height, int img_width)
 {
     try {
         cv::Mat *show_img = (cv::Mat*)mat;
         int i, j;
-        if (!show_img) return;
+        if (!show_img) return 0;
         static int frame_id = 0;
         frame_id++;
         printf("Frame ID: %d\n", frame_id);
@@ -1065,10 +1065,12 @@ extern "C" void draw_detections_cv_v3(mat_cv* mat, detection *dets, int num, flo
         int bottom_margin = 0.05 * img_height;
         int left_margin = 0.35 * img_width;
         cv::putText(*show_img, label, cv::Point(left_margin, img_height - bottom_margin), cv::FONT_HERSHEY_COMPLEX, font_size2, CV_RGB(0, 0, 0), 2 * font_size2, CV_AA); 
+    return tree_count;
     }
     catch (...) {
         cerr << "OpenCV exception: draw_detections_cv_v3() \n";
     }
+    return 0;
 }
 // ----------------------------------------
 

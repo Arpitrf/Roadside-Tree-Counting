@@ -157,6 +157,7 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
     demo_ext_output = ext_output;
     demo_json_port = json_port;
     printf("Demo\n");
+    int tree_count = 0;
     net = parse_network_cfg_custom(cfgfile, 1, 1);    // set batch=1
     if(weightfile){
         load_weights(&net, weightfile);
@@ -301,7 +302,8 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
                 }
             }
 
-            if (!benchmark && !dontdraw_bbox) draw_detections_cv_v3(show_img, local_dets, local_nboxes, demo_thresh, demo_names, demo_alphabet, demo_classes, demo_ext_output, img_height, img_width);
+            if (!benchmark && !dontdraw_bbox) 
+            tree_count = draw_detections_cv_v3(show_img, local_dets, local_nboxes, demo_thresh, demo_names, demo_alphabet, demo_classes, demo_ext_output, img_height, img_width);
             free_detections(local_dets, local_nboxes);
 
             printf("\nFPS:%.1f \t AVG_FPS:%.1f\n", fps, avg_fps);
@@ -391,6 +393,18 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
         }
     }
     printf("input video stream closed. \n");
+
+    // Writing filename and tree_count to a file
+    char snum[10];
+    snprintf(snum, 10, "%d", tree_count );
+    FILE *fp1;
+    fp1 = fopen("tree_count.txt", "a+");
+    char *ans = filename;
+    strcat(strcat(ans, " "), snum);
+    printf("%s", ans);
+    fprintf(fp1, "%s\n", ans);
+    //done
+
     if (output_video_writer) {
         release_video_writer(&output_video_writer);
         printf("output_video_writer closed. \n");
